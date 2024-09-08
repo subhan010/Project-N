@@ -1,62 +1,62 @@
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, emit
 import socket
+import threading
 
 app = Flask(__name__)
+socketio = SocketIO(app)
 
+clients = {}
 
-# Global variable to store client socket
-client_socket = None
+# Background thread to receive messages from server
+def receive_messages(client_socket):
+    while True:
+        try:
+            msg = client_socket.recv(1024).decode('utf-8')
+            if msg:
+                print(msg)
+                socketio.emit('new_message', msg)  # Emit the message to the frontend
+            else:
+                break
+        except:
+            break
 
+# Flask route to serve the chat page
 @app.route('/')
-def home():
-    return render_template('home.html')  # Main page
+def index():
+    return render_template('index.html')
 
+# Flask route to connect to the server
 @app.route('/connect', methods=['POST'])
 def connect():
-    global client_socket
     client_id = request.form['client_id']
-    
-    # Connect to the server
+
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(('server_ip', 5555))
+    client_socket.connect(('127.0.0.1', 5555))
+    
+    clients[client_id] = client_socket  # Store client sockets
+    
     client_socket.send(client_id.encode('utf-8'))
 
-    # Receive response from server
-    response = client_socket.recv(1024).decode('utf-8')
+    # Start the thread to receive messages
+    receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
+    receive_thread.start()
+
+    return "Connected to server"
+
+# Flask-SocketIO route to send messages to the server
+@socketio.on('send_message')
+def handle_message(data):
+    target_id = data['target_id']
+    message = data['message']
     
-    if response == "User not found. Please sign up.":
-        flash("User not found. Please sign up.")
-        return redirect(url_for('signup'))  # Redirect to signup page
+    if target_id in clients:
+        client_socket = clients[target_id]
+        client_socket.send(message.encode('utf-8'))
+        emit('message_sent', f"Message sent to {target_id}")
     else:
-        # Proceed with the chat functionality (not shown)
-        return render_template('chat.html')
+        emit('error', "Client not connected")
 
-@app.route('/signup')
-def signup():
-    return render_template('signup.html')  # Render signup form
 
-@app.route('/create_account', methods=['POST'])
-def create_account():
-    global client_socket
-    
-    # Get the signup data from form
-    client_id = request.form['client_id']
-    username = request.form['username']
-    password = request.form['password']
-    
-    # Prepare data to send to the server
-    client_data = {
-        'client_id': client_id,
-        'username': username,
-        'password': password
-    }
-    
-    # Send signup data to the server (assuming server expects JSON)
-    import json
-    client_socket.send(json.dumps(client_data).encode('utf-8'))
-
-    # Redirect to the chat page after signup
-    return redirect(url_for('home'))
-
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    socketio.run(app, debug=True)

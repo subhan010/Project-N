@@ -1,7 +1,7 @@
 import socket
 import threading
 import json
-from config.db import connect
+from db import connect
 
 
 clients = {}
@@ -9,7 +9,7 @@ clients = {}
 def check_user_in_db(client_id):
     conn = connect()
     cursor = conn.cursor()
-    query = "SELECT * FROM users WHERE client_id = %s"
+    query = "SELECT * FROM users WHERE phone_number = %s"
     cursor.execute(query, (client_id,))
     user = cursor.fetchone()
     conn.close()
@@ -75,7 +75,7 @@ def main():
             print("User found")
             clients[client_id]=client_socket
         else:
-            client_socket.send("User not found.Sign up first")
+            client_socket.send("User not found.Sign up first".encode('utf-8'))
             signup_data=client_socket.recv(1024).decode('utf-8')
             client_data=json.loads(signup_data)
             add_user_to_db(client_data)
