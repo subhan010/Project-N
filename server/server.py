@@ -1,8 +1,29 @@
 import socket
 import threading
+import json
+from config.db import connect
 
 
 clients = {}
+
+def check_user_in_db(client_id):
+    conn = connect()
+    cursor = conn.cursor()
+    query = "SELECT * FROM users WHERE client_id = %s"
+    cursor.execute(query, (client_id,))
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+def add_user_to_db(client_data):
+    conn = connect()
+    cursor = conn.cursor()
+    query = "INSERT INTO users (client_id, username, password) VALUES (%s, %s, %s)"
+    cursor.execute(query, (client_data['client_id'], client_data['username'], client_data['password']))
+    conn.commit()
+    conn.close()
+
+
 
 
 def handle_client(client_socket, client_id):
@@ -33,6 +54,9 @@ def handle_client(client_socket, client_id):
     client_socket.close()
 
 
+
+
+
 def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(('0.0.0.0', 5555))
@@ -45,7 +69,17 @@ def main():
 
        
         client_id = client_socket.recv(1024).decode('utf-8')
-        clients[client_id] = client_socket
+        user=check_user_in_db(client_id)
+
+        if user:
+            print("User found")
+            clients[client_id]=client_socket
+        else:
+            client_socket.send("User not found.Sign up first")
+            signup_data=client_socket.recv(1024).decode('utf-8')
+            client_data=json.loads(signup_data)
+            add_user_to_db(client_data)
+            clients[client_data['client_id']]=client_socket
 
        
         client_thread = threading.Thread(target=handle_client, args=(client_socket, client_id))
