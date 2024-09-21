@@ -18,8 +18,8 @@ def check_user_in_db(client_id):
 def add_user_to_db(client_data):
     conn = connect()
     cursor = conn.cursor()
-    query = "INSERT INTO users (client_id, username, password) VALUES (%s, %s, %s)"
-    cursor.execute(query, (client_data['client_id'], client_data['username'], client_data['password']))
+    query = "INSERT INTO users (phone_number, username, public_key) VALUES (%s, %s, %s)"
+    cursor.execute(query, (client_data['phone_number'], client_data['username'], client_data['public_key']))
     conn.commit()
     conn.close()
 
@@ -28,12 +28,21 @@ def add_user_to_db(client_data):
 
 def handle_client(client_socket, client_id):
     while True:
+        
         try:
         
             msg = client_socket.recv(1024).decode('utf-8')
+            print("server side ",msg)
+            dmsg=json.loads(msg)
+            target_id=dmsg['target_id']
+            message=dmsg['message']
+            arget_socket = clients[target_id]
+            arget_socket.send("MSISMESSAGE".encode('utf-8'))
             if msg:
-               
-                target_id, message = msg.split(':', 1)
+                dmsg=json.loads(msg)
+                target_id=dmsg['target_id']
+                message=dmsg['message']
+                #target_id, message = msg.split(':', 1)
 
                 
                 if target_id in clients:
@@ -74,14 +83,33 @@ def main():
         if user:
             print("User found")
             clients[client_id]=client_socket
+            client_socket.send("Connected".encode('utf-8'))
+            # client_thread = threading.Thread(target=handle_client, args=(client_socket, client_id))
+            # client_thread.start()
         else:
-            client_socket.send("User not found.Sign up first".encode('utf-8'))
-            signup_data=client_socket.recv(1024).decode('utf-8')
-            client_data=json.loads(signup_data)
+            print("user not found")
+            #client_socket.send("User not found.Sign up first".encode('utf-8'))
+            client_socket.send("/signup".encode('utf-8'))
+            
+            # Receive signup data from the client
+            signup_data = client_socket.recv(1024).decode('utf-8')
+            client_data = json.loads(signup_data)
+            print(client_data)
+            
+            # Add the new user to the database
             add_user_to_db(client_data)
-            clients[client_data['client_id']]=client_socket
 
-       
+            # Add the client to the clients list and start the thread
+            clients[client_data['phone_number']] = client_socket
+            client_socket.send("User created".encode('utf-8'))
+
+            
+            # signup_data=client_socket.recv(1024).decode('utf-8')
+            # client_data=json.loads(signup_data)
+            # add_user_to_db(client_data)
+            # clients[client_data['client_id']]=client_socket
+
+        print(clients)
         client_thread = threading.Thread(target=handle_client, args=(client_socket, client_id))
         client_thread.start()
 

@@ -6,6 +6,8 @@ def receive_messages(client_socket):
     while True:
         try:
             msg = client_socket.recv(1024).decode('utf-8')
+            
+
             if msg:
                 print(msg)
             else:

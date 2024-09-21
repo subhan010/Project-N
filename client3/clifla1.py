@@ -3,12 +3,9 @@ import socket
 import threading
 import json
 
-
 app = Flask(__name__)
 
 clients = {}
-
-
 
 # Background thread to receive messages from the server
 def receive_messages(client_socket):
@@ -55,22 +52,22 @@ def connect():
 
     if msg == "/signup":
         client_data = {
-        "phone_number": "112233",
+        "phone_number": "132233",
         "username": "hello",
         "public_key": "test123"
-           }
+    }
         
-        client_socket = clients["112233"]
+        client_socket = clients["132233"]
         client_socket.send(json.dumps(client_data).encode('utf-8'))
         
 
         # Server requests the client to sign up
         return redirect(url_for('signup', client_id=client_id))
-    
+    else:
         # Proceed normally, starting a thread to handle incoming messages
-    receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
-    receive_thread.start()
-    return "Connected to server"
+        receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
+        receive_thread.start()
+        return "Connected to server"
 
     # receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
     # receive_thread.start()
@@ -78,5 +75,6 @@ def connect():
     # return jsonify({"message": f"Connected to server as {client_id}"})
 
 
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(port=5001,debug=True)
