@@ -8,7 +8,7 @@ import os
 
 app = Flask(__name__)
 socketio = SocketIO(app)
-conn = sqlite3.connect('chat_application.db')
+conn = sqlite3.connect('chat_application.db', check_same_thread=False)
 
 cursor = conn.cursor()
 

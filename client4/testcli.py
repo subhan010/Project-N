@@ -20,6 +20,7 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS chats (
 
 
 def user_in_local_db(id):
+    print("db check ",id)
     phonenumber = id
     chatfilelocation = f'{phonenumber}_chat.txt'  
 
@@ -47,11 +48,11 @@ def receive_messages(client_socket):
                 print("Server requested signup. Redirecting to sign up.")
             elif msg:
                 smsg=json.loads(msg)
-                user_in_local_db(smsg['target_id'])
-                with open(f'{smsg['target_id']}_chat.txt', 'a') as file:
+                user_in_local_db(smsg['sender'])
+                with open(f'{smsg['sender']}_chat.txt', 'a') as file:
                     file.write(smsg['message']+'\n')
                 print("Test receiver")
-                print(smsg['target_id'])
+                print("hellow ",msg)
                 
 
                 socketio.emit('new_message', msg)  # Emit message to the frontend
@@ -88,12 +89,12 @@ def connect():
 
     if msg == "/signup":
         client_data = {
-        "phone_number": "338899",
-        "username": "rocketest",
-        "public_key": "ttestt"
+        "phone_number": "112233",
+        "username": "hello",
+        "public_key": "test123"
         }
         
-        client_socket = clients["338899"]
+        client_socket = clients["112233"]
         client_socket.send(json.dumps(client_data).encode('utf-8'))
         client_socket.recv(1024).decode('utf-8')
         # Redirect to sign-up route if server requests sign-up
@@ -141,6 +142,8 @@ def api_send_message():
     target_id = data.get('target_id')
     message = data.get('message')
     
+  
+    
     if not target_id or not message:
         return jsonify({"error": "target_id and message are required"}), 400
     
@@ -150,6 +153,7 @@ def api_send_message():
             "sender":"338899"
            
         })
+    print(client_socket)
     print("sendmsg", client_socket)
     client_socket.send(msg.encode('utf-8'))
     return "send"
@@ -175,4 +179,4 @@ def handle_message(data):
         emit('error', "Target client not connected")
 
 if __name__ == "__main__":
-    socketio.run(app, port=5003, debug=True)
+    socketio.run(app,  port=5003,debug=True)
