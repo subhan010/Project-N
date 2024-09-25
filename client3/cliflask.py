@@ -16,6 +16,7 @@ def receive_messages(client_socket):
         try:
             msg = client_socket.recv(1024).decode('utf-8')
             if msg:
+                print("Testcli ")
                 print(msg)
             else:
                 break
@@ -90,11 +91,12 @@ def api_send_message():
     
     msg=json.dumps({
             "target_id": target_id,
-            "message": message
+            "message": message,
+            "sender":"132233"
            
         })
     client_socket.send(msg.encode('utf-8'))
-    return 
+    return "send"
 
     
     # # Check if the target client is connected

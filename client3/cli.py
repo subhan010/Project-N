@@ -20,8 +20,6 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS chats (
 
 
 
-
-
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 clients = {}
@@ -34,7 +32,7 @@ def receive_messages(client_socket):
             if msg == "/signup":
                 print("Server requested signup. Redirecting to sign up.")
             elif msg:
-                print(f"Received: {msg}")
+                print(f"Received: {msg.split(' ',2)}")
                 socketio.emit('new_message', msg)  # Emit message to the frontend
             else:
                 break
@@ -164,4 +162,4 @@ def handle_message(data):
         emit('error', "Target client not connected")
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app,port=5001 debug=True)

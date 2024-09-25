@@ -34,21 +34,22 @@ def handle_client(client_socket, client_id):
             msg = client_socket.recv(1024).decode('utf-8')
             print("server side ",msg)
             dmsg=json.loads(msg)
+            print(client_id)
             target_id=dmsg['target_id']
             message=dmsg['message']
-            arget_socket = clients[target_id]
-            arget_socket.send("MSISMESSAGE".encode('utf-8'))
+            # arget_socket = clients[target_id]
+            # arget_socket.send("MSISMESSAGE".encode('utf-8'))
             if msg:
-                dmsg=json.loads(msg)
-                target_id=dmsg['target_id']
-                message=dmsg['message']
+                #dmsg=json.loads(msg)
+                #target_id=dmsg['target_id']
+                #message=dmsg['message']
                 #target_id, message = msg.split(':', 1)
 
                 
                 if target_id in clients:
                     target_socket = clients[target_id]
                     
-                    target_socket.send(f"From {client_id}: {message}".encode('utf-8'))
+                    target_socket.send(msg.encode('utf-8'))
                 else:
                     client_socket.send(f"Client {target_id} not found.".encode('utf-8'))
             else:
