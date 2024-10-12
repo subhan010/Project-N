@@ -2,6 +2,7 @@ import socket
 import threading
 import json
 from db import connect
+import time
 
 
 clients = {}
@@ -23,35 +24,54 @@ def add_user_to_db(client_data):
     conn.commit()
     conn.close()
 
+def update_public_key(phone_number,public_key):
+    conn = connect()
+    cursor = conn.cursor()
+    query = "UPDATE users SET public_key = %s WHERE phone_number = %s"
+    cursor.execute(query, (public_key, phone_number))
+    conn.commit()
+    conn.close()
 
+def get_public_key(client_id):
+    conn = connect()
+    cursor = conn.cursor()
+    query = "SELECT public_key FROM users WHERE phone_number = %s"
+    cursor.execute(query, (client_id,))
+    user = cursor.fetchone()
+    conn.close()
+    return user[0]
 
 
 def handle_client(client_socket, client_id):
     while True:
-        
         try:
         
             msg = client_socket.recv(1024).decode('utf-8')
-            print("server side ",msg)
-            dmsg=json.loads(msg)
-            print(client_id)
-            target_id=dmsg['target_id']
-            message=dmsg['message']
-            # arget_socket = clients[target_id]
-            # arget_socket.send("MSISMESSAGE".encode('utf-8'))
-            if msg:
-                #dmsg=json.loads(msg)
-                #target_id=dmsg['target_id']
-                #message=dmsg['message']
-                #target_id, message = msg.split(':', 1)
+            msg=json.loads(msg) 
+            print(msg)
+            if msg['type']=='sendmsg':
+               
+                target_id, message = msg.split(':', 1)
 
-                
+                target_id=msg['target']
+                target_socket=clients[target_id]
                 if target_id in clients:
                     target_socket = clients[target_id]
                     
-                    target_socket.send(msg.encode('utf-8'))
+                    target_socket.send(f"From {client_id}: {message}".encode('utf-8'))
                 else:
                     client_socket.send(f"Client {target_id} not found.".encode('utf-8'))
+
+            elif msg['type']=='keyshare':
+                key=get_public_key(msg['target'])
+                #client_socket = clients['target']
+                print("Hellow type is workig in keyshare")
+                print(clients[msg['target']])
+                print("hellow")
+                target_socket=clients[msg['target']]
+                target_socket.send(key.encode('utf-8'))
+
+
             else:
            
                 del clients[client_id]
@@ -76,14 +96,17 @@ def main():
     while True:
         client_socket, addr = server.accept()
         print(f"Connection from {addr} has been established.")
-
+        
        
-        client_id = client_socket.recv(1024).decode('utf-8')
+        iclient_data = client_socket.recv(1024).decode('utf-8')
+        cli_data=json.loads(iclient_data)
+        client_id=cli_data['client_id']
         user=check_user_in_db(client_id)
 
         if user:
             print("User found")
             clients[client_id]=client_socket
+            update_public_key(client_id,cli_data['public_key'])
             client_socket.send("Connected".encode('utf-8'))
             # client_thread = threading.Thread(target=handle_client, args=(client_socket, client_id))
             # client_thread.start()

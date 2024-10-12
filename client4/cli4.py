@@ -14,8 +14,6 @@ from encrypt_aes_rsa import(
     generate_aes_key
 )
 
-
-
 privatekey, publickey=generate_rsa_key_pair()
 
 
@@ -27,7 +25,7 @@ conn = sqlite3.connect('chat_application.db', check_same_thread=False)
 
 cursor = conn.cursor()
 
-
+# Create a table if it doesn't exist
 cursor.execute('''CREATE TABLE IF NOT EXISTS chats (
                     phonenumber TEXT PRIMARY KEY,
                     chatfilelocation TEXT NOT NULL,
@@ -66,15 +64,17 @@ client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 clients = {}
 targets = {}
 
-
+# Background thread to receive messages from the server
 def receive_messages(client_socket):
     while True:
         try:
-
-            
             msg = client_socket.recv(1024).decode('utf-8')
-            #msg=msg.strip()
-            if msg:
+            if msg == "/signup":
+                print("Server requested signup. Redirecting to sign up.")
+            
+            elif msg =="/keyshare":
+                print("test")
+            elif msg:
                 smsg=json.loads(msg)
                 user_in_local_db(smsg['sender'])
                 with open(f'{smsg['sender']}_chat.txt', 'a') as file:
@@ -83,14 +83,14 @@ def receive_messages(client_socket):
                 print("hellow ",msg)
                 
 
-                socketio.emit('new_message', msg)  
+                socketio.emit('new_message', msg)  # Emit message to the frontend
             else:
                 break
         except Exception as e:
             print(f"Error receiving message: {e}")
             break
 
-
+# Flask route to connect to the server
 @app.route('/connect', methods=['POST'])
 def connect():
     data = request.get_json()
@@ -98,14 +98,13 @@ def connect():
 
     print("publickey",publickey)
     public_key_pem = publickey.public_bytes(
-    encoding=serialization.Encoding.PEM, 
-    format=serialization.PublicFormat.SubjectPublicKeyInfo 
+    encoding=serialization.Encoding.PEM,  # PEM format
+    format=serialization.PublicFormat.SubjectPublicKeyInfo  # Public key format
 )
     public_key_string=public_key_pem.decode('utf-8')
     print(public_key_string)
     
     client_data=json.dumps({
-            "type":"connnect",
             "client_id": client_id,
             "public_key": public_key_string
            
@@ -114,36 +113,40 @@ def connect():
 
 
     
-  
+    # Connect to the server
     global client_socket
     client_socket.connect(('127.0.0.1', 5555))
 
-
+    # Store the client's socket for future communication
     clients[client_id] = client_socket
-    
-   
+
+    # Send client ID to the server
     print("connect", client_socket)
     client_socket.send(client_data.encode('utf-8'))
 
-   
+    # Wait for the server's response (either normal connection or sign-up request)
     msg = client_socket.recv(1024).decode('utf-8')
     
     if msg == "/signup":
         client_data = {
-        "phone_number": "112233",
+        "phone_number": "338899",
         "username": "hello",
         "public_key": public_key_string
         }
         
-        client_socket = clients["112233"]
+        client_socket = clients["338899"]
         client_socket.send(json.dumps(client_data).encode('utf-8'))
-        
+        client_socket.recv(1024).decode('utf-8')
+        # Redirect to sign-up route if server requests sign-up
+       # return redirect(url_for('signup', client_id="112233"))
+  
+        # Start thread to handle incoming messages
     
     receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
     receive_thread.start()
     return jsonify({"message": "Connected to server"})
 
-
+# Flask route to handle user sign-up
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.get_json()
@@ -151,76 +154,47 @@ def signup():
     username = data['username']
     public_key = data['public_key']
     
-    
+    # Check if the client is already connected
     if phone_number in clients:
         client_socket = clients[phone_number]
 
-       
+        # Prepare sign-up data as a JSON object
         signup_data = json.dumps({
-            "type":"signup",
             "phone_number": phone_number,
             "username": username,
             "public_key": public_key
         })
 
-      
+        # Send sign-up data to the server
         client_socket.send(signup_data.encode('utf-8'))
 
-        return "User signed up succefully"#jsonify({"message": "User signed up successfully!"})
+        return jsonify({"message": "User signed up successfully!"})
     else:
-        return "ClientConnected" #jsonify({"error": "Client not connected"}), 400
+        return jsonify({"error": "Client not connected"}), 400
 
+# Flask-SocketIO route to handle sending messages
 
-
-@app.route('/keyshare', methods=['POST'])
-def keyshare():
-    data=request.get_json()
-    target_id=data.get('target')
-    print(target_id)
-   
-    msg=json.dumps({
-        "type":"keyshare",
-        "target":target_id
-    })
-    print(client_socket)
-    client_socket.send(msg.encode('utf-8'))
-
-    return "request send"
+# @app.route('/keyshare', methods=['POST'])
+# def keyshare():
+#     data=request.get_json()
+#     global client_socket
 
 
 
 
-    
-
-
-
-
-
-@app.route('/send_message', methods=['POST'])
+@app.route('/api/send_message', methods=['POST'])
 def api_send_message():
     data = request.get_json()
     global client_socket
     
     target_id = data.get('target_id')
     message = data.get('message')
-  
-    if target_id not in targets:
-        targets[target_id] ={
-            "publickey":None,
-            "priavtekey":None
-        }
-  
-        # skey=["/sendkey",target_id]
-        # sskey=json.dumps(skey)
-        # client_socket.send(sskey.encode('utf-8'))
-        # msg = client_socket.recv(1024).decode('utf-8')
-        #print(msg)
-        
-        return "Share encrypted key"
-
-    if targets[target_id]["publickey"]==None:
-        return "Share key"
-
+    # if target_id not in targets:
+    #     targets[target_id]={
+    #         "publickey":"xyz",
+    #         "priavtekey":"abc"
+    #     }
+    #     return "Share encrypted key "
 
   
     
@@ -228,10 +202,9 @@ def api_send_message():
         return jsonify({"error": "target_id and message are required"}), 400
     
     msg=json.dumps({
-            "type":"sendmsg",
             "target_id": target_id,
             "message": message,
-            "sender":"112233"
+            "sender":"338899"
            
         })
     print(client_socket)
@@ -263,4 +236,4 @@ def handle_message(data):
 
 if __name__ == "__main__":
 
-    socketio.run(app, debug=True)
+    socketio.run(app, port=5003, debug=True)
