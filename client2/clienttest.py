@@ -5,6 +5,57 @@ import threading
 import json
 import sqlite3
 import os
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+import base64
+
+from encrypt_aes_rsa import(
+    generate_rsa_key_pair,
+    encrypt_aes_key,
+    decrypt_aes_key,
+    generate_aes_key
+)
+
+clients = {}
+privatekey=''
+publickey=''
+
+if not os.path.exists("private_key.pem") or not os.path.exists("public_key.pem"):
+    privatekey, publickey=generate_rsa_key_pair()
+    with open("private_key.pem", "wb") as private_file:
+        private_file.write(
+            privatekey.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.BestAvailableEncryption(b"kkrhaitiyar")
+        )
+    )
+
+
+    with open("public_key.pem", "wb") as public_file:
+        public_file.write(
+            publickey.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    )
+else:
+    with open("private_key.pem", "rb") as private_file:
+        privatekey = serialization.load_pem_private_key(
+        private_file.read(),
+        password=b"kkrhaitiyar",
+        backend=default_backend()
+    )
+        
+    with open("public_key.pem", "rb") as public_file:
+        publickey = serialization.load_pem_public_key(
+        public_file.read(),
+        backend=default_backend()
+    )
+
+
+
+    
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -15,7 +66,18 @@ cursor = conn.cursor()
 # Create a table if it doesn't exist
 cursor.execute('''CREATE TABLE IF NOT EXISTS chats (
                     phonenumber TEXT PRIMARY KEY,
-                    chatfilelocation TEXT NOT NULL)''')
+                    chatfilelocation TEXT NOT NULL,
+               rsakey TEXT NULL,
+               aeskey TEXT  NULL)''')
+
+
+cursor.execute('''CREATE TABLE IF NOT EXISTS keys (
+                    phonenumber TEXT PRIMARY KEY,
+                    publickey TEXT NOT NULL,
+               privatekey TEXT NULL)''')
+
+
+
 
 
 
@@ -32,30 +94,83 @@ def user_in_local_db(id):
                   VALUES (?, ?)''', (phonenumber, chatfilelocation))
             conn.commit()
 
+def key_present(id):
+    print("check key")
+    # conn = connect()
+    cursor = conn.cursor()
+    query = "SELECT * FROM keys WHERE phonenumber = ?"
+    cursor.execute(query, (id,))
+    user = cursor.fetchone()
+    # conn.close()
+    return user
 
+def add_publickey(id, publickey):
+    print("add key")
+    # conn = connect()
+    cursor = conn.cursor()
+    query = "INSERT INTO users (phone_number, publickey) VALUES (%s, %s, %s)"
+    cursor.execute(query, (id, publickey, privatekey))
+    conn.commit()
+    # conn.close()
 
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-clients = {}
+def get_public_key(id):
+    print("test2")
+    key=json.dumps({
+    "type":"key",
+      "target_id":id,
+      "key":""
+    })
+    client_socket.send(key.encode('utf-8'))
+def send_public_key_to_server(id):
+    print("test43")
+    pkey=None
+    with open("public_key.pem", "rb") as public_file:
+        rsa_public = public_file.read()
+        public_key_string = rsa_public.decode('utf-8')
+        pkey=json.dumps({
+            "type":"rsakey",
+            "id":id,
+            "key":public_key_string
+            
+
+
+        })
+    client_socket.send(pkey.encode('utf-8'))
+
+
+
+
+
+
 
 # Background thread to receive messages from the server
 def receive_messages(client_socket):
     while True:
         try:
             msg = client_socket.recv(1024).decode('utf-8')
+            dmsg=json.loads(msg)
             if msg == "/signup":
                 print("Server requested signup. Redirecting to sign up.")
-            elif msg:
+            elif dmsg['type']=="message":
                 smsg=json.loads(msg)
                 user_in_local_db(smsg['sender'])
-                with open(f'{smsg['sender']}_chat.txt', 'a') as file:
+                with open(f"/clients/{smsg['sender']}/{smsg['sender']}_chat.txt", 'a') as file:
                     file.write(smsg['message']+'\n')
                 print("Test receiver")
                 print("hellow ",msg)
+            elif dmsg["type"]=="key":
+                print(dmsg)
+                clients[dmsg['target_id']]["public_key"]=dmsg['key']
+                aes_key=generate_aes_key()
+                
+                
+                print("keyreceived")
                 
 
-                socketio.emit('new_message', msg)  # Emit message to the frontend
+                # socketio.emit('new_message', msg)  # Emit message to the frontend
             else:
                 break
         except Exception as e:
@@ -68,11 +183,6 @@ def connect():
     data = request.get_json()
     client_id = data['client_id']
 
-    
-   
-
-
-    
     # Connect to the server
     global client_socket
     client_socket.connect(('127.0.0.1', 5555))
@@ -135,14 +245,45 @@ def signup():
 # Flask-SocketIO route to handle sending messages
 
 
+@app.route('/updatekey', methods=['POST'])
+def updatekey():
+    
+    data = request.get_json()
+    id=data.get('id')
+    send_public_key_to_server(id)
+    return "done"
+
 @app.route('/api/send_message', methods=['POST'])
 def api_send_message():
     data = request.get_json()
     global client_socket
     target_id = data.get('target_id')
     message = data.get('message')
-    
-  
+    type = data.get('type')
+    kp=key_present(target_id)
+    if kp is None:
+        print("test1 ")
+        clients[target_id]={
+            "public_key":"",
+            "private_key":""
+        }
+        publickey=get_public_key(target_id)
+       
+        with open(f"clients/{target_id}/public_key.pem", "w") as file:
+            file.write(publickey)
+        privatekey=generate_aes_key()
+        encoded_key = base64.b64encode(privatekey).decode('utf-8')
+        with open("aes_key.pem", "w") as file:
+            file.write("-----BEGIN AES KEY-----\n")
+            file.write(encoded_key)
+            file.write("\n-----END AES KEY-----\n")
+        
+        
+
+        
+        
+
+
     
     if not target_id or not message:
         return jsonify({"error": "target_id and message are required"}), 400
@@ -150,6 +291,7 @@ def api_send_message():
     msg=json.dumps({
             "target_id": target_id,
             "message": message,
+            "type":type,
             "sender":"112233"
            
         })

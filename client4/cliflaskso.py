@@ -43,15 +43,19 @@ def receive_messages(client_socket):
     while True:
         try:
             msg = client_socket.recv(1024).decode('utf-8')
+            dmsg=json.loads(msg)
             if msg == "/signup":
                 print("Server requested signup. Redirecting to sign up.")
-            elif msg:
+            elif dmsg["type"]=="message":
                 smsg=json.loads(msg)
                 user_in_local_db(smsg['target_id'])
-                with open(f'{smsg['target_id']}_chat.txt', 'a') as file:
+                with open(f"{smsg['target_id']}_chat.txt", 'a') as file:
                     file.write(smsg['message']+'\n')
                 print("Test receiver")
-                print(smsg['target_id'])
+                print(smsg['message'])
+            elif dmsg["type"]=="key":
+                print(dmsg)
+                print("keyreceived")
                 
 
                 socketio.emit('new_message', msg)  # Emit message to the frontend
@@ -140,6 +144,7 @@ def api_send_message():
     global client_socket
     target_id = data.get('target_id')
     message = data.get('message')
+    type=data.get('type')
     
     if not target_id or not message:
         return jsonify({"error": "target_id and message are required"}), 400
@@ -147,6 +152,7 @@ def api_send_message():
     msg=json.dumps({
             "target_id": target_id,
             "message": message,
+            "type":type,
             "sender":"338899"
            
         })

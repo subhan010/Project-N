@@ -1,4 +1,0 @@
-Hello from API!
-test from API!
-hellow world tesest is!
-hellow world tesest is!

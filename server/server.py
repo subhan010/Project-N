@@ -24,6 +24,25 @@ def add_user_to_db(client_data):
     conn.close()
 
 
+def update_rsa_key(client_id,key):
+    conn = connect()
+    cursor = conn.cursor()
+    update_query = "UPDATE users SET public_key = %s WHERE phone_number = %s"
+    cursor.execute(update_query, (key, client_id))
+    conn.commit()
+
+
+
+def get_pulic_key(client_id):
+    conn = connect()
+    cursor = conn.cursor()
+    query = "SELECT public_key FROM users WHERE phone_number = %s"
+    cursor.execute(query, (client_id,))
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+
 
 
 def handle_client(client_socket, client_id):
@@ -33,18 +52,20 @@ def handle_client(client_socket, client_id):
         
             msg = client_socket.recv(1024).decode('utf-8')
             print("server side ",msg)
+           
             dmsg=json.loads(msg)
-            print(client_id)
-            target_id=dmsg['target_id']
-            message=dmsg['message']
-            # arget_socket = clients[target_id]
+            print(dmsg)
+            
+            
+           
+            # print(dmsg['type']=="key")
             # arget_socket.send("MSISMESSAGE".encode('utf-8'))
-            if msg:
+            if dmsg['type'] == "message":
                 #dmsg=json.loads(msg)
                 #target_id=dmsg['target_id']
                 #message=dmsg['message']
                 #target_id, message = msg.split(':', 1)
-
+                target_id=dmsg['target_id']
                 
                 if target_id in clients:
                     target_socket = clients[target_id]
@@ -52,6 +73,20 @@ def handle_client(client_socket, client_id):
                     target_socket.send(msg.encode('utf-8'))
                 else:
                     client_socket.send(f"Client {target_id} not found.".encode('utf-8'))
+            elif dmsg['type'] == "key":
+                print("test3")
+                #dmsg['message']="key exchnage"
+                dmsg['key']=get_pulic_key(dmsg['target_id'])
+                print(dmsg)
+                dmsg=json.dumps(dmsg)
+                client_socket.send(dmsg.encode('utf-8'))
+            elif dmsg['type'] == "rsakey":
+                print("server rsa")
+                update_rsa_key(dmsg['id'],dmsg['key'])
+
+
+
+
             else:
            
                 del clients[client_id]
