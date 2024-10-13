@@ -199,12 +199,12 @@ def connect():
 
     if msg == "/signup":
         client_data = {
-        "phone_number": "112233",
+        "phone_number": "338899",
         "username": "hello",
         "public_key": "test123"
         }
         
-        client_socket = clients["112233"]
+        client_socket = clients["338899"]
         client_socket.send(json.dumps(client_data).encode('utf-8'))
         client_socket.recv(1024).decode('utf-8')
         # Redirect to sign-up route if server requests sign-up
@@ -280,7 +280,6 @@ def api_send_message():
         
         
         
-        
 
         
         
@@ -294,7 +293,7 @@ def api_send_message():
             "target_id": target_id,
             "message": message,
             "type":type,
-            "sender":"112233"
+            "sender":"338899"
            
         })
     print(client_socket)
@@ -323,4 +322,4 @@ def handle_message(data):
         emit('error', "Target client not connected")
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, port=5003, debug=True)
