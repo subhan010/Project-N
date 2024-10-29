@@ -18,8 +18,8 @@ def check_user_in_db(client_id):
 def add_user_to_db(client_data):
     conn = connect()
     cursor = conn.cursor()
-    query = "INSERT INTO users (phone_number, username, public_key) VALUES (%s, %s, %s)"
-    cursor.execute(query, (client_data['phone_number'], client_data['username'], client_data['public_key']))
+    query = "INSERT INTO users (phone_number, username, public_key,password_hashed) VALUES (%s, %s, %s, %s)"
+    cursor.execute(query, (client_data['phone_number'], client_data['username'], client_data['public_key'], client_data['password_hash']))
     conn.commit()
     conn.close()
 
@@ -58,9 +58,9 @@ def handle_client(client_socket, client_id):
             
             
            
-            # print(dmsg['type']=="key")
+            # print(dmsg['ttp']=="key")
             # arget_socket.send("MSISMESSAGE".encode('utf-8'))
-            if dmsg['type'] == "message":
+            if dmsg['ttp'] == "message":
                 #dmsg=json.loads(msg)
                 #target_id=dmsg['target_id']
                 #message=dmsg['message']
@@ -73,16 +73,27 @@ def handle_client(client_socket, client_id):
                     target_socket.send(msg.encode('utf-8'))
                 else:
                     client_socket.send(f"Client {target_id} not found.".encode('utf-8'))
-            elif dmsg['type'] == "key":
+            elif dmsg['ttp'] == "key":
                 print("test3")
                 #dmsg['message']="key exchnage"
                 dmsg['key']=get_pulic_key(dmsg['target_id'])
                 print(dmsg)
                 dmsg=json.dumps(dmsg)
                 client_socket.send(dmsg.encode('utf-8'))
-            elif dmsg['type'] == "rsakey":
+            elif dmsg['ttp'] == "rsakey":
                 print("server rsa")
                 update_rsa_key(dmsg['id'],dmsg['key'])
+            elif dmsg['ttp']== "aeskey":
+                print("send aes")
+                target_socket=clients[dmsg['id']]
+                ty=json.dumps({
+                    "key":dmsg['key'],
+                    "ttp":"aeskey",
+                    "id":dmsg['senderid']
+                }
+                    
+                )
+                target_socket.send(ty.encode('utf-8'))
 
 
 

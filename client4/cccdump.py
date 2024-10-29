@@ -7,18 +7,13 @@ import sqlite3
 import os
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives import hashes
 import base64
-import bcrypt
 
 from encrypt_aes_rsa import(
     generate_rsa_key_pair,
     encrypt_aes_key,
     decrypt_aes_key,
-    generate_aes_key,
-    encrypt_msg,
-    decrypt_msg
+    generate_aes_key
 )
 
 clients = {}
@@ -89,13 +84,13 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS keys (
 def user_in_local_db(id):
     print("db check ",id)
     phonenumber = id
-    chatfilelocation = f'{phonenumber}/chats.txt'  
+    chatfilelocation = f'{phonenumber}_chat.txt'  
 
 
     if not os.path.exists(chatfilelocation):
         with open(chatfilelocation, 'w') as file:
             file.write('')  
-            cursor.execute('''INSERT INTO chats (phonenumber, chatfilelocation) 
+            cursor.execute('''INSERT INTO user_chats (phonenumber, chatfilelocation) 
                   VALUES (?, ?)''', (phonenumber, chatfilelocation))
             conn.commit()
 
@@ -124,7 +119,7 @@ client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 def get_public_key(id):
     print("test2")
     key=json.dumps({
-    "ttp":"key",
+    "type":"key",
       "target_id":id,
       "key":""
     })
@@ -136,26 +131,17 @@ def send_public_key_to_server(id):
         rsa_public = public_file.read()
         public_key_string = rsa_public.decode('utf-8')
         pkey=json.dumps({
-            "ttp":"rsakey",
+            "type":"rsakey",
             "id":id,
             "key":public_key_string
+            
+
 
         })
     client_socket.send(pkey.encode('utf-8'))
 
-def send_key_to_client(key,id):
-    print("ttes")
-    kkey=json.dumps({
-        "ttp":"aeskey",
-        "id":id,
-        "key":key,
-        "senderid":"112233"
-
-    })
-    client_socket.send(kkey.encode('utf-8'))
 
 
-    
 
 
 
@@ -168,59 +154,38 @@ def receive_messages(client_socket):
             dmsg=json.loads(msg)
             if msg == "/signup":
                 print("Server requested signup. Redirecting to sign up.")
-            elif dmsg['ttp']=="message":
+            elif dmsg['type']=="message":
                 smsg=json.loads(msg)
                 user_in_local_db(smsg['sender'])
-               
+                with open(f"/clients/{smsg['sender']}/{smsg['sender']}_chat.txt", 'a') as file:
+                    file.write(smsg['message']+'\n')
                 print("Test receiver")
-                print("hellow ",dmsg['target_id'])
-                sender=dmsg['sender']
-               
-                if sender not in clients:
-                  
-                    with open(f"{sender}/aes_key.pem", "r") as file:
+                print("hellow ",msg)
+                if msg['target_id'] not in clients:
+                    with open(f"{msg['target_id']}/aes_key.pem", "r") as file:
                         lines = file.readlines()
                         key_data = "".join(line.strip() for line in lines if "BEGIN" not in line and "END" not in line)
-                        aes_key = base64.b64decode(key_data)
-                        
-                        clients[sender]=aes_key
-                        
-                
-                print(type(clients[sender]))
-                decmsg=base64.b64decode(dmsg['message'])
-                tye=decrypt_msg(decmsg,clients[sender])
-                print(tye)
-                with open(f"{smsg['sender']}/chats.txt", 'a') as file:
-                    file.write(tye.decode('utf-8')+'\n')
-            elif dmsg["ttp"]=="key":
-                print(dmsg)
-                
-                with open(f"{dmsg['target_id']}/public_key.pem", "w") as file:
-                    file.write(dmsg['key'][0])
             
-                print("keyreceived")
-            elif dmsg['ttp']=="aeskey":
-                if not os.path.exists(f'{dmsg["id"]}/aes_key.pem'):
-                    if not os.path.exists(f'{dmsg["id"]}'):
-                        os.makedirs(f'{dmsg["id"]}')
-                    os.makedirs(f'{dmsg["id"]}')
-                    privatekey=None
-                    with open(f"private_key.pem", "rb") as file:
-                        privatekey = serialization.load_pem_private_key(
-                                    file.read(),
-                                    password=b"kkrhaitiyar"  
-                                )
-                    print(dmsg["key"])
-                    deckey=base64.b64decode(dmsg["key"])
-                    print(deckey)
-                    
-                    decryptedkey=decrypt_aes_key(deckey,privatekey)
-                    decoded_key = base64.b64encode(decryptedkey).decode('utf-8')
-                    with open(f"{dmsg["id"]}/aes_key.pem", "w") as file:
-                        file.write("-----BEGIN AES KEY-----\n")
-                        file.write(decoded_key)
-                        file.write("\n-----END AES KEY-----\n")
+                        aes_key = base64.b64decode(key_data)
+                        clients[msg['target_id']]=aes_key
+                
+                
+                
 
+
+                
+
+
+
+                
+                
+            elif dmsg["type"]=="key":
+                print(dmsg)
+                clients[dmsg['target_id']]["public_key"]=dmsg['key']
+                
+                
+                
+                print("keyreceived")
                 
 
                 # socketio.emit('new_message', msg)  # Emit message to the frontend
@@ -250,16 +215,16 @@ def connect():
     # Wait for the server's response (either normal connection or sign-up request)
     msg = client_socket.recv(1024).decode('utf-8')
 
-    # if msg == "/signup":
-    #     client_data = {
-    #     "phone_number": "112233",
-    #     "username": "hello",
-    #     "public_key": "test123"
-    #     }
+    if msg == "/signup":
+        client_data = {
+        "phone_number": "338899",
+        "username": "hello",
+        "public_key": "test123"
+        }
         
-    #     client_socket = clients["112233"]
-    #     client_socket.send(json.dumps(client_data).encode('utf-8'))
-    #     client_socket.recv(1024).decode('utf-8')
+        client_socket = clients["338899"]
+        client_socket.send(json.dumps(client_data).encode('utf-8'))
+        client_socket.recv(1024).decode('utf-8')
         # Redirect to sign-up route if server requests sign-up
        # return redirect(url_for('signup', client_id="112233"))
   
@@ -275,14 +240,7 @@ def signup():
     data = request.get_json()
     phone_number = data['phone_number']
     username = data['username']
-    hashed_password = bcrypt.hashpw(data['password'].encode(), bcrypt.gensalt())
-    publickey = ""
-    with open("public_key.pem", "rb") as public_file:
-        publickey = serialization.load_pem_public_key(public_file.read(), backend=default_backend())
-    
-
-
-   
+    public_key = data['public_key']
     
     # Check if the client is already connected
     if phone_number in clients:
@@ -292,8 +250,7 @@ def signup():
         signup_data = json.dumps({
             "phone_number": phone_number,
             "username": username,
-            "password_hash":hashed_password,
-            "public_key": publickey
+            "public_key": public_key
         })
 
         # Send sign-up data to the server
@@ -320,68 +277,41 @@ def api_send_message():
     global client_socket
     target_id = data.get('target_id')
     message = data.get('message')
-    ttp = data.get('ttp')
-    if not os.path.exists(f'{target_id}'):
-        os.makedirs(f'{target_id}')
-    
-
-    if not os.path.exists(f'{target_id}/public_key.pem'):
-        get_public_key(target_id)
-        
-    
-    if not os.path.exists(f'{target_id}/aes_key.pem'):
+    type = data.get('type')
+    kp=key_present(target_id)
+    if kp is None:
+        print("test1 ")
+        clients[target_id]={
+            "public_key":"",
+            "private_key":""
+        }
+        publickey=get_public_key(target_id)
+       
+        with open(f"clients/{target_id}/public_key.pem", "w") as file:
+            file.write(publickey)
         privatekey=generate_aes_key()
-        print(privatekey)
         encoded_key = base64.b64encode(privatekey).decode('utf-8')
-        with open(f"{target_id}/aes_key.pem", "w") as file:
+        with open(f"clients/{target_id}/aes_key.pem", "w") as file:
             file.write("-----BEGIN AES KEY-----\n")
             file.write(encoded_key)
             file.write("\n-----END AES KEY-----\n")
-    
-    
-    
-    if target_id not in clients:
-        public_key=None
-        with open(f'{target_id}/public_key.pem', "rb") as file:
-            public_key = serialization.load_pem_public_key(
-            file.read()
-                )
         
-        with open(f'{target_id}/aes_key.pem', "r") as file:
-            lines = file.readlines()
-            key_data = "".join(line.strip() for line in lines if "BEGIN" not in line and "END" not in line)
-            aes_key = base64.b64decode(key_data)
-            clients[target_id]=aes_key
-       
-
-        encrypted_key = encrypt_aes_key(aes_key,public_key)
         
-        enckey=base64.b64encode(encrypted_key).decode('utf-8')
-        send_key_to_client(enckey,target_id)
+        
 
+        
         
 
 
-
     
-   
     if not target_id or not message:
         return jsonify({"error": "target_id and message are required"}), 400
     
-    with open(f"{target_id}/chats.txt", 'a') as file:
-        file.write(message+'\n')
-
-    encmsg=encrypt_msg(clients[target_id],message)
-    print("encrypted,",encmsg)
-    # decmsg=decrypt_msg(encmsg,clients[target_id])
-    # print("decrypted",decmsg)
-    encmsg=base64.b64encode(encmsg).decode('utf-8')
-    print("encomsg,",encmsg)
     msg=json.dumps({
             "target_id": target_id,
-            "message": encmsg,
-            "ttp":"message",
-            "sender":"112233"
+            "message": message,
+            "type":type,
+            "sender":"338899"
            
         })
     print(client_socket)
@@ -410,4 +340,4 @@ def handle_message(data):
         emit('error', "Target client not connected")
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, port=5003, debug=True)

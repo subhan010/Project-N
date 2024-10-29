@@ -12,7 +12,7 @@ def generate_aes_key():
 def aes_encrypt(message, key):
     iv = os.urandom(16)
     padder = padding.PKCS7(128).padder()
-    padded_data = padder.update(message) + padder.finalize()
+    padded_data = padder.update(message.encode()) + padder.finalize()
     cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
     ciphertext = encryptor.update(padded_data) + encryptor.finalize()
@@ -51,6 +51,8 @@ def rsa_encrypt(message, public_key):
     return ciphertext
 
 def rsa_decrypt(ciphertext, private_key):
+    print("working fine")
+    print(type(ciphertext))
     plaintext = private_key.decrypt(
         ciphertext,
         asym_padding.OAEP(
@@ -59,6 +61,7 @@ def rsa_decrypt(ciphertext, private_key):
             label=None
         )
     )
+    print(plaintext)
     return plaintext
 
 # Hybrid Encryption Functions
@@ -69,7 +72,7 @@ def rsa_decrypt(ciphertext, private_key):
 #     rsa_encrypted_aes_key = rsa_encrypt(aes_key, rsa_public_key)
 #     return rsa_encrypted_aes_key, aes_encrypted_message
 
-def encrypt_msg(message, rsa_public_key,aes_key):
+def encrypt_msg(aes_key,message):
     aes_encrypted_message = aes_encrypt(message, aes_key)
     return aes_encrypted_message
 
@@ -82,9 +85,10 @@ def encrypt_aes_key(aes_key, rsa_public_key):
     return rsa_encrypted_key
 
 def decrypt_aes_key(rsa_encrypted_key,rsa_priavte_key):
+    print("working fine")
 
-    decrypted_aes_key=rsa_decrypt(rsa_priavte_key,rsa_encrypted_key)
-    return decrypt_aes_key
+    decrypted_aes_key=rsa_decrypt(rsa_encrypted_key,rsa_priavte_key)
+    return decrypted_aes_key
 
 
 # def hybrid_decrypt(rsa_encrypted_aes_key, aes_encrypted_message, rsa_private_key):
