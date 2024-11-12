@@ -154,9 +154,20 @@ def send_key_to_client(key,id):
     })
     client_socket.send(kkey.encode('utf-8'))
 
-
+def is_connected(sock):
+    try:
+        # Check if the socket has a valid remote address (raddr)
+        if sock.getpeername():  # Only works if connected
+            return True
+    except socket.error:
+        return False
     
 
+def connectser():
+    global client_socket
+    if(not is_connected(client_socket)):
+        client_socket.connect(('127.0.0.1', 5555))
+    
 
 
 
@@ -231,24 +242,42 @@ def receive_messages(client_socket):
             break
 
 # Flask route to connect to the server
-@app.route('/connect', methods=['POST'])
-def connect():
+@app.route('/login', methods=['POST'])
+def login():
     data = request.get_json()
     client_id = data['client_id']
-
+    password=data['password']
     # Connect to the server
     global client_socket
-    client_socket.connect(('127.0.0.1', 5555))
+
+    connectser()
+    #client_socket.connect(('0.tcp.in.ngrok.io', 14586))
 
     # Store the client's socket for future communication
     clients[client_id] = client_socket
-
+    gh=json.dumps({
+        "ttp":"login",
+        "phonenumber":client_id,
+        "password":password
+    })
     # Send client ID to the server
-    print("connect", client_socket)
-    client_socket.send(client_id.encode('utf-8'))
+    #print("connect", client_socket)
+    client_socket.send(gh.encode('utf-8'))
+
+    msg=client_socket.recv(1024).decode('utf-8')
+    if(msg == "Pass"):
+
+        receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
+        receive_thread.start()
+        return "Pass"
+    else:
+        return "Fail"
+
+
 
     # Wait for the server's response (either normal connection or sign-up request)
-    msg = client_socket.recv(1024).decode('utf-8')
+    # msg = client_socket.recv(1024).decode('utf-8')
+    # print(msg)
 
     # if msg == "/signup":
     #     client_data = {
@@ -265,43 +294,58 @@ def connect():
   
         # Start thread to handle incoming messages
     
-    receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
-    receive_thread.start()
+    # receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
+    # receive_thread.start()
     return jsonify({"message": "Connected to server"})
 
 # Flask route to handle user sign-up
 @app.route('/signup', methods=['POST'])
 def signup():
+    global client_socket
     data = request.get_json()
-    phone_number = data['phone_number']
+    phone_number = data['phonenumber']
     username = data['username']
     hashed_password = bcrypt.hashpw(data['password'].encode(), bcrypt.gensalt())
-    publickey = ""
-    with open("public_key.pem", "rb") as public_file:
-        publickey = serialization.load_pem_public_key(public_file.read(), backend=default_backend())
+    # publickey = ""
+    # with open("public_key.pem", "rb") as public_file:
+    #     publickey = serialization.load_pem_public_key(public_file.read(), backend=default_backend())
     
-
-
-   
     
-    # Check if the client is already connected
-    if phone_number in clients:
-        client_socket = clients[phone_number]
+    
+    connectser()
 
-        # Prepare sign-up data as a JSON object
-        signup_data = json.dumps({
-            "phone_number": phone_number,
+    signup_data = json.dumps({
+            "ttp":"signup",
+            "phonenumber": phone_number,
             "username": username,
-            "password_hash":hashed_password,
-            "public_key": publickey
+            "password_hash":base64.b64encode(hashed_password).decode('utf-8')
+            
         })
 
         # Send sign-up data to the server
-        client_socket.send(signup_data.encode('utf-8'))
+    client_socket.send(signup_data.encode('utf-8'))
+    msg=client_socket.recv(1024).decode('utf-8')
+    print(msg)
+    
+    # Check if the client is already connected
+    # if phone_number in clients:
+    #     client_socket = clients[phone_number]
 
-        return jsonify({"message": "User signed up successfully!"})
-    else:
-        return jsonify({"error": "Client not connected"}), 400
+    #     # Prepare sign-up data as a JSON object
+    #     signup_data = json.dumps({
+    #         ""
+    #         "phone_number": phone_number,
+    #         "username": username,
+    #         "password_hash":hashed_password,
+            
+    #     })
+
+    #     # Send sign-up data to the server
+    #     client_socket.send(signup_data.encode('utf-8'))
+
+    return jsonify({"message": "User signed up successfully!"})
+    # else:
+    #     return jsonify({"error": "Client not connected"}), 400
 
 # Flask-SocketIO route to handle sending messages
 
@@ -314,7 +358,7 @@ def updatekey():
     send_public_key_to_server(id)
     return "done"
 
-@app.route('/api/send_message', methods=['POST'])
+@app.route('/send_message', methods=['POST'])
 def api_send_message():
     data = request.get_json()
     global client_socket
@@ -387,6 +431,8 @@ def api_send_message():
     print(client_socket)
     print("sendmsg", client_socket)
     client_socket.send(msg.encode('utf-8'))
+    
+    
     return "send"
     # Check if the target client is connected
     
@@ -396,18 +442,18 @@ def api_send_message():
     # else:
     #     return jsonify({"error": "Target client not connected"}), 404
 
-@socketio.on('send_message')
-def handle_message(data):
-    target_id = data['target_id']
-    message = data['message']
+# @socketio.on('send_message')
+# def handle_message(data):
+#     target_id = data['target_id']
+#     message = data['message']
 
-    # Find the client and send the message
-    if target_id in clients:
-        client_socket = clients[target_id]
-        client_socket.send(message.encode('utf-8'))
-        emit('message_sent', f"Message sent to {target_id}")
-    else:
-        emit('error', "Target client not connected")
+#     # Find the client and send the message
+#     if target_id in clients:
+#         client_socket = clients[target_id]
+#         client_socket.send(message.encode('utf-8'))
+#         emit('message_sent', f"Message sent to {target_id}")
+#     else:
+#         emit('error', "Target client not connected")
 
 if __name__ == "__main__":
     socketio.run(app, debug=True)

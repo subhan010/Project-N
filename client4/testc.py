@@ -194,6 +194,7 @@ def receive_messages(client_socket):
                 
                 with open(f"{smsg['sender']}/chats.txt", 'a') as file:
                     file.write(tye.decode('utf-8')+'\n')
+                client_socket.send("ack".encode('utf-8'))
                 
 
             elif dmsg["ttp"]=="key":
@@ -246,7 +247,8 @@ def connect():
 
     # Connect to the server
     global client_socket
-    client_socket.connect(('127.0.0.1', 5555))
+    client_socket.connect(('0.tcp.in.ngrok.io', 14586))
+    #client_socket.connect(('127.0.0.1', 5555))
 
     # Store the client's socket for future communication
     clients[client_id] = client_socket
